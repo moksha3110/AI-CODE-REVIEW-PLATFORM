@@ -110,5 +110,24 @@ services:
       repository-service:
         condition: service_started
 
+  review-service:
+    build:
+      context: .
+      dockerfile: services/review-service/Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      ENV: local
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/review_service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_PUBLIC_KEY_PATH: /secrets/jwt/public.pem
+    volumes:
+      - ./services/auth-service/keys/public.pem:/secrets/jwt/public.pem:ro   # only the PUBLIC key, to verify tokens
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres_data:
