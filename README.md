@@ -2,7 +2,7 @@
 
 An event-driven microservices platform that reviews code automatically on every push:
 GitHub webhook -> repository service -> RabbitMQ -> AI analysis service -> review
-service -> Postgres -> Next.js dashboard.
+service + notification service -> Postgres -> Next.js dashboard.
 
 Full architecture write-up: see the conversation this was built in, or `docs/`
 (populated as later phases land).
@@ -18,7 +18,7 @@ Full architecture write-up: see the conversation this was built in, or `docs/`
 | 4. Repository Service | **Implemented** - webhook ingestion, GitHub App auth, transactional outbox -> RabbitMQ |
 | 4. AI Analysis Service | **Implemented** - consumes push events, clones changed files, Claude structured-output review, transactional outbox -> RabbitMQ |
 | 4. Review Service | **Implemented** - consumes review.completed, persists reviews + file reviews, REST API for history/detail/quality-trends |
-| 4. Notification Service | Not started |
+| 4. Notification Service | **Implemented** - independent consumer of review.completed, resolves repo owner via Repository Service, REST API for in-app notifications |
 | 4. Dashboard Service / frontend | Not started |
 | 5-10. Docker/K8s/AWS/Terraform/CI/monitoring | Not started |
 
@@ -30,9 +30,10 @@ services/
   repository-service/      FastAPI service: webhooks, GitHub App auth, outbox -> RabbitMQ
   ai-analysis-service/     Background worker: RabbitMQ consumer, git fetch, Claude review, outbox -> RabbitMQ
   review-service/          FastAPI service: RabbitMQ consumer + REST API for review history/detail/trends
+  notification-service/    FastAPI service: RabbitMQ consumer + REST API for in-app notifications
 libs/
   shared_auth/             Installable package every service uses to verify JWTs locally
-docker-compose.yml         Local dev: postgres, redis, rabbitmq, all four services
+docker-compose.yml         Local dev: postgres, redis, rabbitmq, all five services
 ```
 
 ## Event flow
@@ -44,9 +45,16 @@ GitHub push
   -> ai-analysis-service: fetch installation token from repository-service,
      git fetch the exact commit, review each changed file with Claude
   -> outbox -> RabbitMQ "review.completed"
-  -> review-service: persist Review + FileReview rows
-  -> dashboard (not yet built) queries review-service's REST API
+  -> review-service: persist Review + FileReview rows        (own queue)
+  -> notification-service: resolve the repo's owner via       (own queue)
+     repository-service, persist a Notification for them
+  -> dashboard (not yet built) queries review-service's and
+     notification-service's REST APIs
 ```
+
+review-service and notification-service both bind their own queue to the
+same `review.completed` routing key on the shared topic exchange - a real
+pub-sub fan-out, not a chain. Neither service knows the other exists.
 
 ## Running locally
 
@@ -60,6 +68,7 @@ cp services/auth-service/.env.example services/auth-service/.env
 cp services/repository-service/.env.example services/repository-service/.env
 cp services/ai-analysis-service/.env.example services/ai-analysis-service/.env
 cp services/review-service/.env.example services/review-service/.env
+cp services/notification-service/.env.example services/notification-service/.env
 # fill in GITHUB_CLIENT_ID/SECRET, GITHUB_APP_*, and ANTHROPIC_API_KEY in the respective .env files
 docker compose up --build
 ```
@@ -70,6 +79,7 @@ docker compose up --build
 | repository-service | 8001 | http://localhost:8001/docs |
 | ai-analysis-service | 8002 | http://localhost:8002/docs (health/metrics only - no public API) |
 | review-service | 8003 | http://localhost:8003/docs |
+| notification-service | 8004 | http://localhost:8004/docs |
 
 Prometheus metrics are exposed at `/metrics` on every service.
 
@@ -83,28 +93,36 @@ pytest -v
 ```
 
 Every service's suite runs against an in-memory SQLite DB (and fakeredis,
-where a service uses Redis) - no external services required. All four
+where a service uses Redis) - no external services required. All five
 suites are green as of this commit (`auth-service`: 7 passed,
-`repository-service`: 6 passed, `ai-analysis-service`: 8 passed,
-`review-service`: 8 passed).
+`repository-service`: 9 passed, `ai-analysis-service`: 8 passed,
+`review-service`: 8 passed, `notification-service`: 13 passed).
 
 ## Known gaps / honest trade-offs (worth being able to discuss in an interview)
 
 - **Outbox relays and RabbitMQ consumers run as background asyncio tasks
   inside the same process** as each service's API, in repository-service,
-  ai-analysis-service, and review-service. At real scale each becomes its
-  own deployable so it can be restarted/scaled independently -
-  `run_outbox_relay`/`run_consumer` are already written to be portable to a
-  standalone worker with no code changes.
+  ai-analysis-service, review-service, and notification-service. At real
+  scale each becomes its own deployable so it can be restarted/scaled
+  independently - `run_outbox_relay`/`run_consumer` are already written to
+  be portable to a standalone worker with no code changes.
 - **No dead-letter table.** A row that keeps failing to publish (outbox
   relay), or a message that exhausts `MAX_ANALYSIS_ATTEMPTS` (AI Analysis
   Service's consumer), is dropped/logged rather than parked somewhere for
-  manual replay.
+  manual replay. Notification Service has no attempts ledger at all - see
+  its own README.
 - **No repository-ownership check in Review Service.** Its REST API
   authenticates the caller but doesn't verify they own the `repository_id`
   they're querying - that check lives in Repository Service's user-scoped
   `GET /repositories`. A real dashboard/BFF would only pass IDs it already
-  fetched that way.
+  fetched that way. (Notification Service *does* enforce this, scoping
+  every query to the authenticated user - the difference is that Review
+  Service has no independent way to know who owns a `repository_id` short
+  of a network call to Repository Service on every request, while
+  Notification Service resolves ownership once, at ingest time, and stores
+  it.)
+- **No real notification delivery channel.** Notification Service writes
+  in-app rows only - no email, Slack, or push.
 - **`rotate_refresh_token`** (auth-service) issues the new token pair and
   revokes the old one in two separate commits on the same session, not one
   atomic transaction. Low risk (same session, sequential awaits) but the

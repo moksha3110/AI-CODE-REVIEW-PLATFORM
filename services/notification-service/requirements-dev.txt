@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest==8.2.2
+pytest-asyncio==0.23.7
+respx==0.21.1
+aiosqlite==0.20.0
+cryptography==42.0.8
+ruff==0.5.0
+mypy==1.10.1

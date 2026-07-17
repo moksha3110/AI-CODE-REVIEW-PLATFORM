@@ -5,3 +5,4 @@ CREATE DATABASE auth_service;
 CREATE DATABASE repository_service;
 CREATE DATABASE ai_analysis_service;
 CREATE DATABASE review_service;
+CREATE DATABASE notification_service;
