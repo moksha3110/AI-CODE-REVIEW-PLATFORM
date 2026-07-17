@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import RepositoryNotFoundError
 from app.core.logging import get_logger
+from app.models.installation import Installation
 from app.models.outbox_event import OutboxEvent
 from app.models.push_event import PushEvent
 from app.models.repository import Repository
@@ -54,6 +55,11 @@ async def process_push_event(
             f"no repository record for github_repo_id={github_repo_id}; is it fully installed?"
         )
 
+    installation_result = await db.execute(
+        select(Installation.github_installation_id).where(Installation.id == repository.installation_id)
+    )
+    github_installation_id = installation_result.scalar_one()
+
     commits = [
         {
             "sha": c["id"],
@@ -88,6 +94,7 @@ async def process_push_event(
             "repository_id": str(repository.id),
             "repository_full_name": repository.full_name,
             "installation_id": str(repository.installation_id),
+            "github_installation_id": github_installation_id,
             "ref": push_event.ref,
             "before_sha": push_event.before_sha,
             "after_sha": push_event.after_sha,

@@ -88,5 +88,27 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  ai-analysis-service:
+    build:
+      context: .
+      dockerfile: services/ai-analysis-service/Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      ENV: local
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ai_analysis_service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REPOSITORY_SERVICE_BASE_URL: http://repository-service:8000
+      INTERNAL_SERVICE_API_KEY: ${INTERNAL_SERVICE_API_KEY:-local_dev_internal_key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-8}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      repository-service:
+        condition: service_started
+
 volumes:
   postgres_data:
