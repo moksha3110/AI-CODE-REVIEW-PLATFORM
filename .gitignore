@@ -1,0 +1,46 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+keys/
+*.pem
+*.key
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# --- Docker ---
+*.log
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Coverage ---
+.coverage
+htmlcov/
+coverage.xml

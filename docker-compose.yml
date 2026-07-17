@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: local
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/auth_service
+      REDIS_URL: redis://redis:6379/0
+      JWT_PRIVATE_KEY_PATH: /secrets/jwt/private.pem
+      JWT_PUBLIC_KEY_PATH: /secrets/jwt/public.pem
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_OAUTH_REDIRECT_URI: http://localhost:8000/api/v1/auth/github/callback
+      FRONTEND_URL: http://localhost:3000
+    volumes:
+      - ./services/auth-service/keys:/secrets/jwt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  repository-service:
+    build:
+      context: .
+      dockerfile: services/repository-service/Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      ENV: local
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/repository_service
+      REDIS_URL: redis://redis:6379/1
+      JWT_PUBLIC_KEY_PATH: /secrets/jwt/public.pem
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY_PATH: /secrets/github/app_private_key.pem
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      INTERNAL_SERVICE_API_KEY: ${INTERNAL_SERVICE_API_KEY:-local_dev_internal_key}
+    volumes:
+      - ./services/auth-service/keys/public.pem:/secrets/jwt/public.pem:ro   # only the PUBLIC key, to verify tokens
+      - ./services/repository-service/keys:/secrets/github:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
