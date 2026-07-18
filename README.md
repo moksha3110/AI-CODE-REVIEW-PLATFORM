@@ -27,6 +27,14 @@ above) caught real, separate documentation issues in this same README -
 an ambiguous test-suite count and missing links to the sub-READMEs - both
 fixed in the commits right after.
 
+![Security findings](docs/screenshots/review-security-findings.png)
+
+A later real review, on the README itself, independently flagged the
+same three issues already called out by hand in "Known gaps" below - the
+git-argv token exposure, Review Service's missing repository-ownership
+check, and `rotate_refresh_token`'s non-atomic commits. The AI arrived at
+the same list a human already had, from reading the code cold.
+
 ## Build status
 
 | Phase | Status |
