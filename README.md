@@ -22,8 +22,8 @@ Full architecture write-up: see the conversation this was built in, or `docs/`
 | 4. Dashboard Service / frontend | **Implemented** - Next.js app: auth, repositories list, repository detail (review history + quality-trends chart), review detail (per-file findings), notifications bell |
 | 5. Docker Compose | **Implemented** - all six services + postgres/redis/rabbitmq wired |
 | 6. Kubernetes | **Implemented** - plain YAML for all six services + in-cluster postgres/redis/rabbitmq, verified end-to-end against a local minikube cluster (see `k8s/README.md`) |
-| 7. AWS deployment | Blocked on 8 - needs a real cluster to deploy onto (installing the AWS Load Balancer Controller, pushing images, wiring DNS) |
-| 8. Terraform | **Written, not applied** - VPC + EKS cluster + node group + ECR repos for everything `k8s/` needs (see `terraform/README.md`). Validated with `terraform plan` against real AWS credentials; `terraform apply` deliberately not run yet (~$175-180/mo while running) |
+| 7. AWS deployment | **Implemented and live** - real EKS cluster, AWS Load Balancer Controller installed, all 6 images pushed to ECR, real GitHub OAuth App + GitHub App + Anthropic credentials wired, public URL reachable (sslip.io - see `k8s/README.md`) |
+| 8. Terraform | **Applied** - VPC + EKS cluster + node group + ECR repos + ALB Controller IRSA, all provisioned for real via `terraform apply` (see `terraform/README.md`) |
 | 9-10. CI/CD, monitoring | Not started |
 
 ## Repo layout
