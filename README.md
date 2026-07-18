@@ -43,6 +43,16 @@ terraform/                 AWS infra (VPC, EKS, ECR) for running k8s/ on a real 
 docker-compose.yml         Local dev: postgres, redis, rabbitmq, all six services
 ```
 
+Each service, plus `k8s/` and `terraform/`, has its own README with
+specifics (what's implemented, known gaps, running it standalone):
+[auth-service](services/auth-service/README.md) ·
+[repository-service](services/repository-service/README.md) ·
+[ai-analysis-service](services/ai-analysis-service/README.md) ·
+[review-service](services/review-service/README.md) ·
+[notification-service](services/notification-service/README.md) ·
+[dashboard-service](services/dashboard-service/README.md) ·
+[k8s/](k8s/README.md) · [terraform/](terraform/README.md)
+
 ## Event flow
 
 ```
