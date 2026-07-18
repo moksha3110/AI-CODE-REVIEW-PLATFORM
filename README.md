@@ -7,6 +7,26 @@ service + notification service -> Postgres -> Next.js dashboard.
 Full architecture write-up: see the conversation this was built in, or `docs/`
 (populated as later phases land).
 
+## Screenshots
+
+Real deployment on AWS EKS - a real GitHub push through this exact repo's
+own GitHub App produced these:
+
+| | |
+|---|---|
+| ![Landing page](docs/screenshots/landing-page.png) | ![Connected repositories](docs/screenshots/repositories-list.png) |
+| Landing page | Repositories, once connected via the GitHub App |
+| ![Quality trend](docs/screenshots/quality-trend-chart.png) | ![Review history](docs/screenshots/review-history.png) |
+| Quality trend across pushes to this repo | Review history per commit |
+
+![Review detail](docs/screenshots/review-detail.png)
+
+Per-file findings from a real Claude review of an actual commit to this
+repo. Earlier reviews (visible in the quality-trend/history screenshots
+above) caught real, separate documentation issues in this same README -
+an ambiguous test-suite count and missing links to the sub-READMEs - both
+fixed in the commits right after.
+
 ## Build status
 
 | Phase | Status |
