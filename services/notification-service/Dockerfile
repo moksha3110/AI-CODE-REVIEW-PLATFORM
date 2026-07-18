@@ -4,7 +4,12 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 COPY services/notification-service/requirements.txt ./requirements.txt
-COPY libs/shared_auth ./libs/shared_auth
+# requirements.txt's `-e ../../libs/shared_auth` resolves relative to this
+# stage's WORKDIR (/build), i.e. up to /, so shared_auth must land at
+# /libs/shared_auth, not /build/libs/shared_auth - matching the real repo's
+# services/<name>/../../libs/shared_auth layout one level "shallower" than
+# WORKDIR here.
+COPY libs/shared_auth /libs/shared_auth
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -18,6 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl \
     && useradd --create-home --uid 1000 appuser
 
 COPY --from=builder /opt/venv /opt/venv
+# `pip install -e` doesn't copy shared_auth into site-packages - it only
+# adds a path reference to wherever it was installed from. That source
+# directory has to exist here too, at the same absolute path, or every
+# `import shared_auth` fails at runtime even though the image built fine.
+COPY --from=builder /libs/shared_auth /libs/shared_auth
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 
 WORKDIR /app

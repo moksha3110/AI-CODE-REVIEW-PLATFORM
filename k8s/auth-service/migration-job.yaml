@@ -1,0 +1,24 @@
+# One-shot: run `kubectl apply -f` then `kubectl wait --for=condition=complete
+# job/auth-service-migrate -n code-review-platform` BEFORE applying
+# deployment.yaml, not as an initContainer - see k8s/README.md for why
+# (avoids concurrent `alembic upgrade head` races across replicas, and
+# avoids silently re-running a migration on every pod restart).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: auth-service-migrate
+  namespace: code-review-platform
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/auth-service:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: auth-service-config
+            - secretRef:
+                name: auth-service-secrets

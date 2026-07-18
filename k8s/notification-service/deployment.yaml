@@ -1,0 +1,67 @@
+# Replicas: 2 - RabbitMQ consumer idempotent via a unique DB constraint on
+# notifications.push_event_id (see app/models/notification.py); public REST
+# API is stateless request/response. Both safe under concurrent replicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: code-review-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000  # matches the Dockerfile's `appuser` (--uid 1000)
+      containers:
+        - name: notification-service
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/notification-service:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: notification-service-config
+            - secretRef:
+                name: notification-service-secrets
+            - secretRef:
+                name: rabbitmq-credentials
+            - secretRef:
+                name: internal-service-api-key
+          volumeMounts:
+            - name: jwt-public-key
+              mountPath: /secrets/jwt
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: jwt-public-key
+          secret:
+            secretName: jwt-public-key

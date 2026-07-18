@@ -1,0 +1,65 @@
+# Replicas: 2 - RabbitMQ consumer idempotent via a unique DB constraint on
+# reviews.push_event_id (see app/models/review.py); public REST API is
+# stateless request/response. Both safe under concurrent replicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-service
+  namespace: code-review-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: review-service
+  template:
+    metadata:
+      labels:
+        app: review-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000  # matches the Dockerfile's `appuser` (--uid 1000)
+      containers:
+        - name: review-service
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/review-service:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: review-service-config
+            - secretRef:
+                name: review-service-secrets
+            - secretRef:
+                name: rabbitmq-credentials
+          volumeMounts:
+            - name: jwt-public-key
+              mountPath: /secrets/jwt
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: jwt-public-key
+          secret:
+            secretName: jwt-public-key

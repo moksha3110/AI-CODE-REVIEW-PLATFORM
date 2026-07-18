@@ -1,0 +1,75 @@
+# Single Ingress, 5 host rules - not 5 separate Ingress objects. On EKS,
+# separate Ingress resources each provision their own ALB unless explicitly
+# grouped, so one resource is simpler, cheaper (one ALB), and reads as "the
+# whole public surface in one file." ai-analysis-service deliberately has
+# no rule here - see k8s/ai-analysis-service/service.yaml.
+#
+# This targets the AWS Load Balancer Controller (ingressClassName: alb).
+# Installing that controller, and the real ALB/Route53/ACM cert it would
+# provision from this resource, is Phase 7 (AWS) work - this manifest is
+# written and reviewable now, but does nothing until that controller
+# exists in the cluster. Hostnames below are placeholders (*.crp.local);
+# see k8s/README.md for what to change before a real deployment.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: code-review-platform
+  namespace: code-review-platform
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/group.name: code-review-platform
+spec:
+  ingressClassName: alb
+  rules:
+    - host: auth.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-service
+                port:
+                  number: 8000
+    - host: api-repos.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: repository-service
+                port:
+                  number: 8000
+    - host: api-reviews.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: review-service
+                port:
+                  number: 8000
+    - host: api-notifications.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8000
+    - host: app.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard-service
+                port:
+                  number: 3000

@@ -16,6 +16,7 @@ venv/
 keys/
 *.pem
 *.key
+k8s/secrets.yaml
 
 # --- Node / frontend ---
 node_modules/

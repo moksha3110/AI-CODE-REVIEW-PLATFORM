@@ -1,0 +1,20 @@
+# Mirrors scripts/postgres-init/init-multiple-dbs.sql verbatim. Mounted to
+# /docker-entrypoint-initdb.d/ on the postgres pod, same as the bind mount
+# docker-compose.yml uses - the official postgres image only runs files in
+# that directory once, against an empty data directory, so this preserves
+# the exact first-boot-only semantics compose already relies on.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: code-review-platform
+data:
+  init-multiple-dbs.sql: |
+    -- Each microservice owns its own logical database on the shared Postgres
+    -- instance (see architecture notes: database-per-service in ownership,
+    -- shared instance for cost reasons at this project's scale).
+    CREATE DATABASE auth_service;
+    CREATE DATABASE repository_service;
+    CREATE DATABASE ai_analysis_service;
+    CREATE DATABASE review_service;
+    CREATE DATABASE notification_service;

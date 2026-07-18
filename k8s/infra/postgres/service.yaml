@@ -1,0 +1,18 @@
+# Headless (ClusterIP: None) - required for a StatefulSet to give its pod
+# a stable DNS name (postgres-0.postgres.code-review-platform.svc.cluster.local).
+# Every service's DATABASE_URL just points at "postgres" and relies on
+# ClusterIP-less round-robin-to-the-one-pod DNS resolution, which works
+# identically to a normal Service here since there's only ever one replica.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: code-review-platform
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres

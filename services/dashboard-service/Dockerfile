@@ -21,8 +21,18 @@ RUN npm run build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000
-RUN useradd --create-home --uid 1000 appuser
+# HOSTNAME=0.0.0.0 is required, not just PORT: Kubernetes auto-injects a
+# HOSTNAME env var set to the pod's name into every container, and the
+# Next.js standalone server reads process.env.HOSTNAME to decide its bind
+# address. Left unset here, that pod-name value resolves (via the pod's
+# own /etc/hosts entry) to the pod's IP specifically, not all interfaces -
+# Service-routed traffic still reaches it by coincidence (Services target
+# Pod IPs), but loopback-based tooling like `kubectl port-forward` breaks,
+# since it connects via 127.0.0.1 inside the pod's network namespace.
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+# node:22-slim already ships a UID/GID 1000 "node" user, so appuser needs
+# a different uid to avoid a `useradd` collision.
+RUN useradd --create-home --uid 1001 appuser
 
 # `output: "standalone"` traces the minimal server + pruned node_modules
 # needed to run - static assets and public files are copied in separately.

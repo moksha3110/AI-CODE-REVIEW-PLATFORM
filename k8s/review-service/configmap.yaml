@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: review-service-config
+  namespace: code-review-platform
+data:
+  ENV: production
+  LOG_LEVEL: INFO
+  RABBITMQ_EXCHANGE: code_review_events
+  RABBITMQ_CONSUME_QUEUE: review_service.review_completed
+  RABBITMQ_CONSUME_ROUTING_KEY: review.completed
+  JWT_PUBLIC_KEY_PATH: /secrets/jwt/public.pem
+  JWT_ISSUER: auth-service
+  JWT_AUDIENCE: code-review-platform
+  CORS_ALLOW_ORIGINS: '["https://app.crp.local"]'

@@ -1,0 +1,16 @@
+# ClusterIP only - no public API besides /api/v1/healthz, /api/v1/readyz,
+# and /metrics. This Service exists purely for in-cluster reachability
+# (kubectl port-forward debugging, a future Prometheus scrape config) - it
+# is intentionally NOT referenced by k8s/ingress.yaml.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-analysis-service
+  namespace: code-review-platform
+spec:
+  selector:
+    app: ai-analysis-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

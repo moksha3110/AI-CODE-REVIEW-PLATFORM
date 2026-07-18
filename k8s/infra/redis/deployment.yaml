@@ -1,0 +1,50 @@
+# No auth, no persistence - matches docker-compose.yml exactly (used only
+# for auth-service's rate limiting/OAuth state and repository-service's
+# webhook dedup/token cache, both fine to lose on restart). Recreate
+# strategy: this is a singleton with a fixed Service name both consumers
+# depend on, so briefly running two Redis pods in parallel during a rolling
+# update adds nothing and risks address confusion for no benefit.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: code-review-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

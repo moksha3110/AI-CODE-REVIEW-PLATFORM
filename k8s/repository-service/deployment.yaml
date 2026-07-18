@@ -1,0 +1,73 @@
+# Replicas: 2 - the outbox relay running inside this process uses
+# `SELECT ... FOR UPDATE SKIP LOCKED` (see services/repository-service/README.md),
+# which is exactly what makes concurrent relay loops across replicas safe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: repository-service
+  namespace: code-review-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: repository-service
+  template:
+    metadata:
+      labels:
+        app: repository-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000  # matches the Dockerfile's `appuser` (--uid 1000)
+      containers:
+        - name: repository-service
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/repository-service:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: repository-service-config
+            - secretRef:
+                name: repository-service-secrets
+            - secretRef:
+                name: rabbitmq-credentials
+            - secretRef:
+                name: internal-service-api-key
+          volumeMounts:
+            - name: jwt-public-key
+              mountPath: /secrets/jwt
+              readOnly: true
+            - name: github-app-key
+              mountPath: /secrets/github
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 150m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+      volumes:
+        - name: jwt-public-key
+          secret:
+            secretName: jwt-public-key
+        - name: github-app-key
+          secret:
+            secretName: github-app-key
