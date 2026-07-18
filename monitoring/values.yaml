@@ -1,0 +1,114 @@
+# Helm values for prometheus-community/kube-prometheus-stack (Phase 10).
+# Installed via Helm CLI, NOT Terraform's helm provider - same "Terraform
+# owns AWS, kubectl/helm own cluster objects" boundary already established
+# for the AWS Load Balancer Controller (see terraform/README.md). This is
+# a cluster workload, not AWS infrastructure.
+#
+# Every resource request below is deliberately trimmed from the chart's
+# defaults: the cluster's 2x m7i-flex.large nodes were already at ~65-70%
+# CPU requests before this stack (see terraform/README.md's node sizing
+# note), so the full chart defaults would risk pods stuck Pending rather
+# than a straightforward install. No persistent storage is configured
+# (Prometheus/Alertmanager/Grafana all use emptyDir) - consistent with
+# this project's "destroy the cluster between review sessions" pattern
+# (terraform/README.md's Teardown section): metrics history has no reason
+# to outlive the cluster itself, and skipping PVCs avoids extra EBS cost.
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+prometheus:
+  prometheusSpec:
+    resources:
+      requests:
+        cpu: 150m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    # Short retention, not the chart's 10d default - this is a portfolio
+    # demo cluster reviewed episodically, not a production system with
+    # compliance-driven retention needs. No storageSpec set -> emptyDir,
+    # so retention is bounded by pod lifetime anyway; this just keeps
+    # Prometheus's own working-set memory smaller.
+    retention: 2d
+    # Match this project's own namespace + kube-system, not every
+    # namespace/CRD cluster-wide - keeps scrape target count (and
+    # therefore memory) down.
+    ruleNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+grafana:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # Real credentials, not the chart's "prom-operator" default password -
+  # references a Secret created imperatively (kubectl create secret,
+  # never committed to git), same "generate for real, don't commit
+  # dummy/real secrets to the repo" pattern as k8s/secrets.example.yaml.
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  # Grafana serves its own web UI directly - no Ingress path prefix
+  # rewriting needed, unlike the backend services behind api-*.sslip.io.
+  # The actual Ingress object is a separate file (grafana-ingress.yaml)
+  # so it can share the app Ingress's ALB via group.name instead of
+  # provisioning a second load balancer (~$16-25/mo more - the exact
+  # cost this project already flagged once for the first ALB).
+  ingress:
+    enabled: false
+  defaultDashboardsTimezone: UTC
+
+kubeStateMetrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+# kubeEtcd/kubeControllerManager/kubeScheduler/kubeProxy monitor the
+# control plane's own components - not reachable on EKS (AWS manages the
+# control plane, these endpoints don't exist on the nodes). Chart
+# defaults to trying anyway, which just produces permanently-down
+# targets in Prometheus; disabled instead of leaving false alarms.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

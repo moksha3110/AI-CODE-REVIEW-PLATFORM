@@ -62,7 +62,7 @@ and `.github/workflows/ci-cd.yml`.
 | 7. AWS deployment | **Implemented and live** - real EKS cluster, AWS Load Balancer Controller installed, all 6 images pushed to ECR, real GitHub OAuth App + GitHub App + Anthropic credentials wired, public URL reachable (sslip.io - see `k8s/README.md`) |
 | 8. Terraform | **Applied** - VPC + EKS cluster + node group + ECR repos + ALB Controller IRSA, all provisioned for real via `terraform apply` (see `terraform/README.md`) |
 | 9. CI/CD | **Implemented and live** - GitHub Actions: tests + lint on every push/PR, auto build/push/deploy to the live EKS cluster on merge to `main` via OIDC (no long-lived AWS keys), verified end-to-end (see `.github/workflows/ci-cd.yml`) |
-| 10. Monitoring | Not started |
+| 10. Monitoring | **Implemented and live** - Prometheus + Grafana (`kube-prometheus-stack`) in-cluster, real node/pod/API-server metrics confirmed scraping, standard `kubernetes-mixin` dashboards, shares the existing ALB (see `monitoring/README.md`) |
 
 ## Repo layout
 
@@ -78,18 +78,21 @@ libs/
   shared_auth/             Installable package every service uses to verify JWTs locally
 k8s/                       Kubernetes manifests: all six services + in-cluster postgres/redis/rabbitmq
 terraform/                 AWS infra (VPC, EKS, ECR) for running k8s/ on a real cluster
+monitoring/                Prometheus + Grafana (kube-prometheus-stack), Helm values + Grafana Ingress
 docker-compose.yml         Local dev: postgres, redis, rabbitmq, all six services
 ```
 
-Each service, plus `k8s/` and `terraform/`, has its own README with
-specifics (what's implemented, known gaps, running it standalone):
+Each service, plus `k8s/`, `terraform/`, and `monitoring/`, has its own
+README with specifics (what's implemented, known gaps, running it
+standalone):
 [auth-service](services/auth-service/README.md) ·
 [repository-service](services/repository-service/README.md) ·
 [ai-analysis-service](services/ai-analysis-service/README.md) ·
 [review-service](services/review-service/README.md) ·
 [notification-service](services/notification-service/README.md) ·
 [dashboard-service](services/dashboard-service/README.md) ·
-[k8s/](k8s/README.md) · [terraform/](terraform/README.md)
+[k8s/](k8s/README.md) · [terraform/](terraform/README.md) ·
+[monitoring/](monitoring/README.md)
 
 ## Event flow
 

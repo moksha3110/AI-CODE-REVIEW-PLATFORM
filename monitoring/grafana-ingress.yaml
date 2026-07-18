@@ -1,0 +1,35 @@
+# Separate Ingress object (not folded into k8s/ingress.yaml) because it
+# lives in a different namespace (monitoring, not code-review-platform) -
+# Ingress rules can't reference a Service in another namespace directly.
+# Shares the same ALB as the app Ingress via group.name (must match
+# k8s/ingress.yaml's alb.ingress.kubernetes.io/group.name exactly) rather
+# than provisioning a second load balancer - avoids the ~$16-25/mo a
+# second ALB would add, the same cost this project already flagged once
+# for the first one (see terraform/README.md's Teardown section).
+#
+# Hostname is a placeholder (grafana.crp.local) like k8s/ingress.yaml's
+# originally were - replace with grafana.<current ALB IP>.sslip.io before
+# applying; see monitoring/README.md.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/group.name: code-review-platform
+spec:
+  ingressClassName: alb
+  rules:
+    - host: grafana.crp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80
