@@ -5,6 +5,7 @@ metadata:
   namespace: code-review-platform
 spec:
   backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
   template:
     spec:
       restartPolicy: Never

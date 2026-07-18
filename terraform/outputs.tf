@@ -59,6 +59,11 @@ output "lb_controller_irsa_role_arn" {
   value       = module.lb_controller_irsa.iam_role_arn
 }
 
+output "github_actions_deploy_role_arn" {
+  description = "IAM role ARN GitHub Actions assumes via OIDC to deploy - set as the AWS_GITHUB_ACTIONS_ROLE_ARN repo Secret, see terraform/README.md."
+  value       = aws_iam_role.github_actions_deploy.arn
+}
+
 output "update_kubeconfig_command" {
   description = "Run this to point kubectl at the new cluster."
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"

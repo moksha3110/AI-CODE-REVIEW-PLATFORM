@@ -173,6 +173,45 @@ an HTTPS listener without a `certificate-arn` annotation - confirmed this
 breaks reconciliation entirely (`no certificate found for host: ...`), not
 just a no-op, if no ACM cert exists yet.
 
+## GitHub Actions CI/CD (Phase 9)
+
+`terraform/github_actions_oidc.tf` provisions what `.github/workflows/ci-cd.yml`
+needs to deploy on merge to `main`: an OIDC provider trusting
+`token.actions.githubusercontent.com`, an IAM role scoped via exact-match
+(`StringEquals`, not `StringLike`) trust conditions to only
+`repo:moksha3110/AI-CODE-REVIEW-PLATFORM:ref:refs/heads/main` (no long-lived
+AWS access keys stored in GitHub at all), and an EKS access entry giving
+that role `AmazonEKSEditPolicy` scoped to the `code-review-platform`
+namespace only - not cluster-admin.
+
+After `terraform apply`, set these in the repo's Settings -> Secrets and
+variables -> Actions (`gh` CLI isn't used in this project's workflow, so
+this is a manual one-time step):
+
+| Name | Type | Value |
+|---|---|---|
+| `AWS_GITHUB_ACTIONS_ROLE_ARN` | Secret | `terraform output github_actions_deploy_role_arn` |
+| `AWS_REGION` | Variable | `us-east-1` |
+| `EKS_CLUSTER_NAME` | Variable | `code-review-platform` |
+| `NEXT_PUBLIC_AUTH_SERVICE_URL` | Variable | current `auth.<ip>.sslip.io` (or real domain) |
+| `NEXT_PUBLIC_REPOSITORY_SERVICE_URL` | Variable | current `api-repos.<ip>.sslip.io` |
+| `NEXT_PUBLIC_REVIEW_SERVICE_URL` | Variable | current `api-reviews.<ip>.sslip.io` |
+| `NEXT_PUBLIC_NOTIFICATION_SERVICE_URL` | Variable | current `api-notifications.<ip>.sslip.io` |
+
+The 4 `NEXT_PUBLIC_*` Variables need updating by hand whenever the ALB is
+torn down and recreated (its IP isn't stable - see the sslip.io section in
+`k8s/README.md`) - same "documented manual step" pattern as the
+StorageClass and ALB Controller install above, not something CD resolves
+dynamically (a real new failure mode - the Ingress/ALB might not exist yet
+post-`destroy` - for marginal benefit).
+
+**Expected failure mode, not a bug**: if the cluster has been
+`terraform destroy`-ed since the last deploy, the `deploy` job's
+`kubectl` steps fail (cluster doesn't exist) - re-`apply` this Terraform
+config, redo the Load Balancer Controller install and Ingress steps
+above, update the 4 hostname Variables, and the next merge to `main`
+succeeds again.
+
 ## Teardown
 
 **The ALB is created by this controller reacting to the Ingress object,

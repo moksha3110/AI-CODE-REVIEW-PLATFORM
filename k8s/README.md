@@ -158,6 +158,16 @@ kubectl apply -f k8s/dashboard-service/deployment.yaml -f k8s/dashboard-service/
 kubectl apply -f k8s/ingress.yaml
 ```
 
+This full sequence (namespace/secrets/infra/ingress) is a one-time
+bootstrap - run it by hand once per cluster (or after a `terraform
+destroy` + re-`apply`). **After that first bootstrap**,
+`.github/workflows/ci-cd.yml`'s `deploy` job handles the repeated part
+automatically on every merge to `main`: migration Jobs (uniquely named
+per commit SHA, same "run and wait for `condition=complete` before
+touching the Deployment" rule as above) then `kubectl set image` per
+service - see `terraform/README.md`'s CI/CD section for the one-time
+OIDC/Secrets setup this depends on.
+
 ## Explicitly out of scope this phase
 
 - Real EKS/VPC provisioning, node groups, security groups (Terraform,

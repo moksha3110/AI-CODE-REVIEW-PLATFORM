@@ -10,6 +10,10 @@ metadata:
   namespace: code-review-platform
 spec:
   backoffLimit: 2
+  # Cleans itself up 24h after finishing - without this, completed
+  # migration Jobs accumulate forever across every CD merge (Jobs are
+  # immutable, so CD creates a fresh uniquely-named one per commit).
+  ttlSecondsAfterFinished: 86400
   template:
     spec:
       restartPolicy: Never

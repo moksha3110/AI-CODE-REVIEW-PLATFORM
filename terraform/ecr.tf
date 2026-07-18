@@ -3,11 +3,15 @@ resource "aws_ecr_repository" "service" {
 
   name = each.value
 
-  # MUTABLE to match the manifests' :latest convention as committed
-  # (k8s/*/deployment.yaml). IMMUTABLE + per-commit-SHA tags is the better
-  # real-world practice and the natural follow-up once CI/CD exists to
-  # generate those tags.
-  image_tag_mutability = "MUTABLE"
+  # IMMUTABLE, now that CI/CD (Phase 9) generates real per-commit-SHA
+  # tags - this was flagged as the natural follow-up the moment this
+  # comment was first written. CD never pushes :latest; the :latest
+  # placeholder still committed in k8s/*/deployment.yaml is illustrative
+  # only (it was never directly appliable anyway, given the
+  # <AWS_ACCOUNT_ID> placeholder alongside it) - the live cluster's image
+  # references are always set imperatively, either by hand (documented in
+  # k8s/README.md) or by CD's `kubectl set image`.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
