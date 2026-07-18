@@ -103,6 +103,22 @@ Every manifest uses two kinds of placeholder:
   `k8s/ingress.yaml`, every service's `CORS_ALLOW_ORIGINS`/`FRONTEND_URL`
   ConfigMap value, and the dashboard build-arg command above. Replace all of
   these together (grep for `crp.local`) when real DNS exists.
+
+  **For a real end-to-end verification without owning a domain**, this
+  project used [sslip.io](https://sslip.io) instead: once the AWS Load
+  Balancer Controller (see `terraform/README.md`) provisions a real ALB,
+  resolve its DNS name to an IP (`dig +short <alb-dns-name>`) and derive 5
+  hostnames like `auth.<ip-with-dashes>.sslip.io`,
+  `app.<ip-with-dashes>.sslip.io`, etc. - any subdomain of `<ip>.sslip.io`
+  resolves to `<ip>` automatically, no DNS provisioning needed, and this
+  maps directly onto the existing host-based Ingress rules. **Caveat,
+  confirmed real**: ALB IPs are not guaranteed stable long-term (AWS can
+  rotate the underlying IPs behind an ALB's DNS name) - fine for a
+  demo verified now and `terraform destroy`-ed after, not something to
+  treat as a permanent hostname. These real, ephemeral, account-specific
+  values were applied directly to the live cluster (not committed here) -
+  see "Secrets" above for why account-specific values stay out of the
+  checked-in manifests.
 - **Images**: `<AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/<service>:latest`
   in every `deployment.yaml`/`migration-job.yaml` - an ECR-shaped
   placeholder matching the actual Phase 7 target. Nothing in this phase

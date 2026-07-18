@@ -54,6 +54,11 @@ output "ebs_csi_irsa_role_arn" {
   value       = module.ebs_csi_irsa.iam_role_arn
 }
 
+output "lb_controller_irsa_role_arn" {
+  description = "IRSA role ARN for the AWS Load Balancer Controller - pass this to the Helm install's serviceAccount.annotations, see terraform/README.md."
+  value       = module.lb_controller_irsa.iam_role_arn
+}
+
 output "update_kubeconfig_command" {
   description = "Run this to point kubectl at the new cluster."
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"

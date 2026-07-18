@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # --- CORS ---
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
+    # --- Frontend (post-GitHub-App-install redirect target) ---
+    frontend_url: str = Field(default="http://localhost:3000")
+
 
 @lru_cache
 def get_settings() -> Settings:

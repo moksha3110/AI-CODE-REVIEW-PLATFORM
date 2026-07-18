@@ -64,3 +64,26 @@ resource "aws_eks_addon" "ebs_csi_driver" {
 
   tags = local.common_tags
 }
+
+# IRSA role for the AWS Load Balancer Controller. The controller itself is
+# installed via Helm CLI, not Terraform - see terraform/README.md for why
+# (same 15-minute-EKS-auth-token-expiry reasoning that kept the StorageClass
+# out of this provider's blast radius). Unlike vpc-cni/aws-ebs-csi-driver,
+# the LB Controller is a plain Helm chart, not an EKS-managed add-on type,
+# so there's no matching aws_eks_addon resource here - just the role.
+module "lb_controller_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name                              = "${var.cluster_name}-lb-controller"
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+
+  tags = local.common_tags
+}

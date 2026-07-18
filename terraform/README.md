@@ -140,8 +140,61 @@ docker build -f services/auth-service/Dockerfile -t <account>.dkr.ecr.us-east-1.
 docker push <account>.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest
 # repeat per service, then update k8s/*/deployment.yaml's image: placeholders
 # to match, and follow k8s/README.md's apply order.
+```
 
-# to stop the bill between sessions:
+## Installing the AWS Load Balancer Controller (manual, not Terraform)
+
+`k8s/ingress.yaml` targets `ingressClassName: alb`, but nothing provisions
+a real ALB until this controller exists in the cluster. This IRSA role
+*is* provisioned by this Terraform config (`terraform/irsa.tf`'s
+`lb_controller_irsa` module); the controller itself is a Helm chart,
+installed as a deliberately separate, manual step - same
+15-minute-EKS-auth-token-expiry reasoning that already kept the
+`kubernetes` provider out of this config for the StorageClass gap above.
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts && helm repo update
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=$(terraform output -raw cluster_name) \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform output -raw lb_controller_irsa_role_arn) \
+  --set region=us-east-1 \
+  --set vpcId=$(terraform output -raw vpc_id)
+kubectl -n kube-system rollout status deployment/aws-load-balancer-controller
+```
+
+Once running, `kubectl apply -f k8s/ingress.yaml` provisions a real ALB
+within a few minutes (`kubectl get ingress code-review-platform -n
+code-review-platform -w` until `ADDRESS` populates). **Note**:
+`alb.ingress.kubernetes.io/listen-ports` in that manifest must not declare
+an HTTPS listener without a `certificate-arn` annotation - confirmed this
+breaks reconciliation entirely (`no certificate found for host: ...`), not
+just a no-op, if no ACM cert exists yet.
+
+## Teardown
+
+**The ALB is created by this controller reacting to the Ingress object,
+not by Terraform - `terraform destroy` has no knowledge of it and will
+not delete it.** Deleting the cluster underneath a live ALB orphans a real
+load balancer that keeps billing (~$16-25/mo) with nothing left to manage
+it, and it won't show up in `terraform plan`/`show` at all since it's
+entirely outside Terraform's graph. Confirmed real, not hypothetical, this
+session.
+
+```bash
+# 1. delete the Ingress first, and WAIT for the ALB to actually deprovision:
+kubectl delete -f k8s/ingress.yaml -n code-review-platform
+aws elbv2 describe-load-balancers --region us-east-1 --query \
+  "LoadBalancers[?contains(LoadBalancerName, 'codereviewplatform')]"
+# ^ expect this to return empty before proceeding
+
+# 2. optional but tidy - avoids a dangling Helm release for a cluster
+#    that's about to disappear:
+helm uninstall aws-load-balancer-controller -n kube-system
+
+# 3. now safe - nothing AWS-created-but-Terraform-unmanaged remains:
 terraform destroy
 ```
 

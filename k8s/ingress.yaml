@@ -18,7 +18,11 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # HTTP only - no ACM cert exists for this phase's sslip.io hostnames.
+    # An HTTPS:443 listener with no certificate-arn breaks reconciliation
+    # entirely ("no certificate found for host: ..."), not just a no-op -
+    # confirmed by hitting this exact error against the real controller.
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     alb.ingress.kubernetes.io/group.name: code-review-platform
 spec:
   ingressClassName: alb

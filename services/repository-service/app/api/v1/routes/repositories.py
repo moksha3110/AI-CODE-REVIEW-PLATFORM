@@ -23,7 +23,6 @@ from app.services.installation_service import record_installation
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 INSTALL_STATE_TTL_SECONDS = 600
-FRONTEND_INSTALL_SUCCESS_URL = "http://localhost:3000/repositories/connected"
 
 
 @router.get("/install", response_model=InstallUrlOut)
@@ -74,7 +73,8 @@ async def installation_callback(
         connected_by_user_id=uuid_module.UUID(user_id),
     )
 
-    return RedirectResponse(url=f"{FRONTEND_INSTALL_SUCCESS_URL}?setup_action={setup_action}")
+    frontend_url = get_settings().frontend_url
+    return RedirectResponse(url=f"{frontend_url}/repositories/connected?setup_action={setup_action}")
 
 
 @router.get("", response_model=list[RepositoryOut])

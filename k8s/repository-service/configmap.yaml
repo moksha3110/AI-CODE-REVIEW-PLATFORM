@@ -13,3 +13,4 @@ data:
   GITHUB_APP_SLUG: CHANGE_ME
   RABBITMQ_EXCHANGE: code_review_events
   CORS_ALLOW_ORIGINS: '["https://app.crp.local"]'
+  FRONTEND_URL: https://app.crp.local
