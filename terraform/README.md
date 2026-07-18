@@ -72,10 +72,23 @@ has an outage, every private-subnet node loses internet egress
 simultaneously. Saves ~$32+/mo vs one-per-AZ. The right call for a
 portfolio demo cluster - documented, not hidden.
 
-**EKS API endpoint restricted to your IP**, not `0.0.0.0/0`
-(`cluster_endpoint_public_access_cidrs`). Basic hygiene; means you need to
-update `terraform.tfvars` and re-apply (or `-target` just that change) if
-your IP changes.
+**EKS API endpoint open to `0.0.0.0/0`** (`cluster_endpoint_public_access_cidrs`
+in `eks.tf`). Originally restricted to a single `my_ip_cidr` value as
+"basic hygiene," but that broke the moment real CI/CD (Phase 9) needed
+`kubectl` access from GitHub-hosted Actions runners - their IPs are
+unpredictable and change every run, so a single-IP allowlist and a CI
+runner are fundamentally incompatible. Confirmed live: the `deploy` job's
+migration/rollout steps timed out entirely (`dial tcp ...: i/o timeout`)
+against the IP-restricted endpoint. The actual access boundary is IAM
+(`github_actions_oidc.tf`'s OIDC-scoped role, assumable only by pushes to
+`main` on this exact repo) plus Kubernetes RBAC (that role's EKS access
+entry is `AmazonEKSEditPolicy` scoped to the `code-review-platform`
+namespace only) - the CIDR restriction was defense-in-depth on top of
+those, not the only control, so opening it doesn't remove the real
+authorization checks. `var.my_ip_cidr` is still declared in
+`variables.tf`/`terraform.tfvars` (harmless, currently unused) if a
+future setup wants to revert to IP-restricted + a self-hosted runner
+inside the VPC instead.
 
 **Node group: `t3.medium` x2, ON_DEMAND, AL2023.** Sized against the actual
 committed manifests - 15 pods (12 app-tier + 3 infra) requesting ~1.9 vCPU /

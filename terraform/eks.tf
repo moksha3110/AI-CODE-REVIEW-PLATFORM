@@ -17,12 +17,22 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # Public access is required (kubectl from your own machine, not a
-  # bastion) but restricted to your IP - not 0.0.0.0/0. Private access is
-  # also on so nodes reach the API server over the VPC rather than the
+  # Public access is required (kubectl from your own machine, and from
+  # GitHub-hosted Actions runners for CI/CD - see .github/workflows/ci-cd.yml's
+  # `deploy` job). Originally restricted to var.my_ip_cidr only ("basic
+  # hygiene" per this file's old comment), but GitHub's hosted runners use
+  # unpredictable, constantly-changing IPs with no fixed range to allowlist -
+  # confirmed live: the `deploy` job's kubectl steps timed out entirely
+  # against the my_ip_cidr-only endpoint. Opened to 0.0.0.0/0 so CD can
+  # reach the API server; the real access boundary is IAM (the
+  # `deploy` job's OIDC-scoped role, see github_actions_oidc.tf) plus
+  # Kubernetes RBAC (that role's EKS access entry is EditPolicy scoped to
+  # the code-review-platform namespace only) - the network CIDR was
+  # defense-in-depth on top of those, not the only control. Private access
+  # is also on so nodes reach the API server over the VPC rather than the
   # single NAT gateway.
   cluster_endpoint_public_access       = true
-  cluster_endpoint_public_access_cidrs = [var.my_ip_cidr]
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
   cluster_endpoint_private_access      = true
 
   # Off by default: unbounded CloudWatch Logs cost for an idle demo
