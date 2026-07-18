@@ -19,8 +19,9 @@ Full architecture write-up: see the conversation this was built in, or `docs/`
 | 4. AI Analysis Service | **Implemented** - consumes push events, clones changed files, Claude structured-output review, transactional outbox -> RabbitMQ |
 | 4. Review Service | **Implemented** - consumes review.completed, persists reviews + file reviews, REST API for history/detail/quality-trends |
 | 4. Notification Service | **Implemented** - independent consumer of review.completed, resolves repo owner via Repository Service, REST API for in-app notifications |
-| 4. Dashboard Service / frontend | Not started |
-| 5-10. Docker/K8s/AWS/Terraform/CI/monitoring | Not started |
+| 4. Dashboard Service / frontend | **Implemented** - Next.js app: auth, repositories list, repository detail (review history + quality-trends chart), review detail (per-file findings), notifications bell |
+| 5. Docker Compose | **Implemented** - all six services + postgres/redis/rabbitmq wired |
+| 6-10. Kubernetes/AWS/Terraform/CI/monitoring | Not started |
 
 ## Repo layout
 
@@ -31,9 +32,10 @@ services/
   ai-analysis-service/     Background worker: RabbitMQ consumer, git fetch, Claude review, outbox -> RabbitMQ
   review-service/          FastAPI service: RabbitMQ consumer + REST API for review history/detail/trends
   notification-service/    FastAPI service: RabbitMQ consumer + REST API for in-app notifications
+  dashboard-service/       Next.js frontend: auth, repositories, review/quality-trend views, notifications
 libs/
   shared_auth/             Installable package every service uses to verify JWTs locally
-docker-compose.yml         Local dev: postgres, redis, rabbitmq, all five services
+docker-compose.yml         Local dev: postgres, redis, rabbitmq, all six services
 ```
 
 ## Event flow
@@ -48,8 +50,8 @@ GitHub push
   -> review-service: persist Review + FileReview rows        (own queue)
   -> notification-service: resolve the repo's owner via       (own queue)
      repository-service, persist a Notification for them
-  -> dashboard (not yet built) queries review-service's and
-     notification-service's REST APIs
+  -> dashboard-service queries review-service's and
+     notification-service's REST APIs directly from the browser
 ```
 
 review-service and notification-service both bind their own queue to the
@@ -69,6 +71,7 @@ cp services/repository-service/.env.example services/repository-service/.env
 cp services/ai-analysis-service/.env.example services/ai-analysis-service/.env
 cp services/review-service/.env.example services/review-service/.env
 cp services/notification-service/.env.example services/notification-service/.env
+cp services/dashboard-service/.env.local.example services/dashboard-service/.env.local
 # fill in GITHUB_CLIENT_ID/SECRET, GITHUB_APP_*, and ANTHROPIC_API_KEY in the respective .env files
 docker compose up --build
 ```
@@ -80,6 +83,7 @@ docker compose up --build
 | ai-analysis-service | 8002 | http://localhost:8002/docs (health/metrics only - no public API) |
 | review-service | 8003 | http://localhost:8003/docs |
 | notification-service | 8004 | http://localhost:8004/docs |
+| dashboard-service | 3000 | http://localhost:3000 |
 
 Prometheus metrics are exposed at `/metrics` on every service.
 
@@ -139,3 +143,21 @@ suites are green as of this commit (`auth-service`: 7 passed,
   sends back once OAuth `state` checks out; there's no additional
   verification that the account being installed matches anything about the
   connecting user beyond that.
+- **Dashboard auth relies on React effect-ordering, not just network
+  timing.** The frontend keeps its access token in memory only (never
+  `localStorage`) and restores it via a silent refresh against an
+  httpOnly cookie on mount. Because the OAuth callback page's effect fires
+  before `AuthProvider`'s own mount effect (child effects run before
+  parent effects in React), a naive implementation can race the two and
+  land in a permanently inconsistent state (`accessToken` cleared by a
+  losing refresh call while `user` gets set by the callback's fetch). Fixed
+  with a synchronous ref flag the mount effect checks before attempting a
+  refresh at all - see `services/dashboard-service/src/lib/auth-context.tsx`.
+  Any future change to this file should be tested by loading
+  `/auth/callback#access_token=...` as a fresh page load, not a
+  client-side navigation, since that's the exact scenario that exposed the
+  bug.
+- **No automated frontend tests.** Dashboard Service was verified manually
+  through the browser (see its own README) rather than with a Vitest/RTL
+  or Playwright suite - the one place in the platform where "tested" means
+  "manually exercised," not "has a green CI-style test run."

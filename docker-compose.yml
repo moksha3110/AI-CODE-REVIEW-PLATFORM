@@ -152,5 +152,17 @@ services:
       repository-service:
         condition: service_started
 
+  dashboard-service:
+    build:
+      context: .
+      dockerfile: services/dashboard-service/Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - repository-service
+      - review-service
+      - notification-service
+
 volumes:
   postgres_data:
