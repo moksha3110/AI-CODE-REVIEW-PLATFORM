@@ -40,7 +40,14 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:moksha3110/AI-CODE-REVIEW-PLATFORM:ref:refs/heads/main"]
+      # GitHub now embeds stable numeric owner/repo IDs in the sub claim
+      # (immutable IDs, added to survive org/repo renames) instead of the
+      # plain "repo:OWNER/REPO:ref:..." format - confirmed by decoding the
+      # actual OIDC JWT a live `deploy` run received, since the old
+      # name-only value here silently never matched. Still StringEquals,
+      # still exact-match: this is a stricter binding than before (tied to
+      # the immutable IDs, not just the renameable name), not a loosening.
+      values = ["repo:moksha3110@180270968/AI-CODE-REVIEW-PLATFORM@1304319896:ref:refs/heads/main"]
     }
   }
 }

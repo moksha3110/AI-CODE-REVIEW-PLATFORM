@@ -179,10 +179,23 @@ just a no-op, if no ACM cert exists yet.
 needs to deploy on merge to `main`: an OIDC provider trusting
 `token.actions.githubusercontent.com`, an IAM role scoped via exact-match
 (`StringEquals`, not `StringLike`) trust conditions to only
-`repo:moksha3110/AI-CODE-REVIEW-PLATFORM:ref:refs/heads/main` (no long-lived
-AWS access keys stored in GitHub at all), and an EKS access entry giving
-that role `AmazonEKSEditPolicy` scoped to the `code-review-platform`
-namespace only - not cluster-admin.
+`repo:moksha3110@180270968/AI-CODE-REVIEW-PLATFORM@1304319896:ref:refs/heads/main`
+(no long-lived AWS access keys stored in GitHub at all), and an EKS access
+entry giving that role `AmazonEKSEditPolicy` scoped to the
+`code-review-platform` namespace only - not cluster-admin.
+
+**Note on the `sub` claim format**: GitHub embeds stable numeric owner/repo
+IDs in the `sub` claim (`OWNER@id/REPO@id`), not just the plain
+`repo:OWNER/REPO:ref:...` format most OIDC tutorials show - confirmed by
+decoding an actual OIDC JWT from a live `deploy` run this session, after
+the plain-name value silently failed every `AssumeRoleWithWebIdentity` call
+with an identical, unhelpful "Not authorized" error. These IDs are
+immutable (survive renames), so this is a *stricter* binding than the
+name-only version, not a loosened one - but it means the trust policy's
+`sub` value isn't guessable from the repo's URL alone if this project is
+ever forked or the role recreated; re-derive it the same way: add a
+throwaway debug step to the `deploy` job that decodes
+`$ACTIONS_ID_TOKEN_REQUEST_TOKEN`'s JWT payload and prints `sub`.
 
 After `terraform apply`, set these in the repo's Settings -> Secrets and
 variables -> Actions (`gh` CLI isn't used in this project's workflow, so

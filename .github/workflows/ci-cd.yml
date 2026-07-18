@@ -119,20 +119,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TEMPORARY debug step - prints only the sub/aud claims (not the raw
-      # token) of the OIDC JWT this job actually receives, to compare
-      # against the IAM role's trust policy condition. Remove once the
-      # OIDC AssumeRoleWithWebIdentity failure is diagnosed.
-      - name: Debug OIDC token claims
-        run: |
-          IDTOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          PAYLOAD=$(echo "$IDTOKEN" | cut -d. -f2)
-          MOD=$(( ${#PAYLOAD} % 4 ))
-          if [ "$MOD" -ne 0 ]; then PAYLOAD="${PAYLOAD}$(printf '%.0s=' $(seq 1 $((4 - MOD))))"; fi
-          echo "$PAYLOAD" | tr '_-' '/+' | base64 -d | jq '{sub, aud, repository, repository_owner, ref, event_name}'
-          echo "Secret role ARN length as seen by this job (should be 73 chars, non-zero if secret is set):"
-          echo -n "${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}" | wc -c
-
       - name: Configure AWS credentials (OIDC, no long-lived keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
