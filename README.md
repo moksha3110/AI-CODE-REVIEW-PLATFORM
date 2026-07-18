@@ -35,6 +35,15 @@ git-argv token exposure, Review Service's missing repository-ownership
 check, and `rotate_refresh_token`'s non-atomic commits. The AI arrived at
 the same list a human already had, from reading the code cold.
 
+![CI/CD pipeline](docs/screenshots/ci-cd-pipeline.png)
+
+A real GitHub Actions run against this repo: tests + lint across all six
+services, then an OIDC-authenticated build/push/deploy to the live EKS
+cluster - no long-lived AWS keys stored in GitHub. Getting the `deploy`
+job's OIDC auth working took two real debugging rounds (a stale IAM trust
+condition, then a since-relaxed EKS network ACL); see `terraform/README.md`
+and `.github/workflows/ci-cd.yml`.
+
 ## Build status
 
 | Phase | Status |
@@ -52,7 +61,8 @@ the same list a human already had, from reading the code cold.
 | 6. Kubernetes | **Implemented** - plain YAML for all six services + in-cluster postgres/redis/rabbitmq, verified end-to-end against a local minikube cluster (see `k8s/README.md`) |
 | 7. AWS deployment | **Implemented and live** - real EKS cluster, AWS Load Balancer Controller installed, all 6 images pushed to ECR, real GitHub OAuth App + GitHub App + Anthropic credentials wired, public URL reachable (sslip.io - see `k8s/README.md`) |
 | 8. Terraform | **Applied** - VPC + EKS cluster + node group + ECR repos + ALB Controller IRSA, all provisioned for real via `terraform apply` (see `terraform/README.md`) |
-| 9-10. CI/CD, monitoring | Not started |
+| 9. CI/CD | **Implemented and live** - GitHub Actions: tests + lint on every push/PR, auto build/push/deploy to the live EKS cluster on merge to `main` via OIDC (no long-lived AWS keys), verified end-to-end (see `.github/workflows/ci-cd.yml`) |
+| 10. Monitoring | Not started |
 
 ## Repo layout
 
