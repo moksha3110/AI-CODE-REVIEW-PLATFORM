@@ -30,6 +30,7 @@ build/
 *.tfstate
 *.tfstate.*
 *.tfvars
+tfplan
 !*.tfvars.example
 
 # --- Docker ---

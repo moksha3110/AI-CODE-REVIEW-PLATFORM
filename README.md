@@ -21,7 +21,10 @@ Full architecture write-up: see the conversation this was built in, or `docs/`
 | 4. Notification Service | **Implemented** - independent consumer of review.completed, resolves repo owner via Repository Service, REST API for in-app notifications |
 | 4. Dashboard Service / frontend | **Implemented** - Next.js app: auth, repositories list, repository detail (review history + quality-trends chart), review detail (per-file findings), notifications bell |
 | 5. Docker Compose | **Implemented** - all six services + postgres/redis/rabbitmq wired |
-| 6-10. Kubernetes/AWS/Terraform/CI/monitoring | Not started |
+| 6. Kubernetes | **Implemented** - plain YAML for all six services + in-cluster postgres/redis/rabbitmq, verified end-to-end against a local minikube cluster (see `k8s/README.md`) |
+| 7. AWS deployment | Blocked on 8 - needs a real cluster to deploy onto (installing the AWS Load Balancer Controller, pushing images, wiring DNS) |
+| 8. Terraform | **Written, not applied** - VPC + EKS cluster + node group + ECR repos for everything `k8s/` needs (see `terraform/README.md`). Validated with `terraform plan` against real AWS credentials; `terraform apply` deliberately not run yet (~$175-180/mo while running) |
+| 9-10. CI/CD, monitoring | Not started |
 
 ## Repo layout
 
@@ -35,6 +38,8 @@ services/
   dashboard-service/       Next.js frontend: auth, repositories, review/quality-trend views, notifications
 libs/
   shared_auth/             Installable package every service uses to verify JWTs locally
+k8s/                       Kubernetes manifests: all six services + in-cluster postgres/redis/rabbitmq
+terraform/                 AWS infra (VPC, EKS, ECR) for running k8s/ on a real cluster
 docker-compose.yml         Local dev: postgres, redis, rabbitmq, all six services
 ```
 

@@ -1,0 +1,156 @@
+# Terraform: AWS infrastructure (Phase 8)
+
+Provisions exactly what `k8s/` (Phase 6) needs to actually run on a real
+cluster: a VPC, an EKS cluster + managed node group, and 6 ECR repositories.
+Targets `us-east-1` by default.
+
+## What this does NOT do
+
+- **Install the AWS Load Balancer Controller.** `k8s/ingress.yaml` targets
+  `ingressClassName: alb`, but the controller itself needs IRSA + a Helm
+  install *onto* the cluster - that's deploying software, not provisioning
+  infrastructure, and stays a Phase 7 step.
+- **Route53 DNS, ACM certificates, TLS termination.**
+- **Migrate Postgres/Redis/RabbitMQ to managed AWS services** (RDS,
+  ElastiCache, Amazon MQ). This was already decided in Phase 6 - everything
+  stays in-cluster - and isn't revisited here.
+- **Per-service IRSA role bindings** beyond the two add-ons that need them
+  to function at all (vpc-cni, aws-ebs-csi-driver). A future service that
+  needs its own AWS permissions (e.g. S3 access) gets its own IRSA role
+  when that need actually exists.
+- **HorizontalPodAutoscaler / Cluster Autoscaler / Karpenter.**
+- **An S3 remote state backend.** Local state only - see "State management"
+  below.
+- **Create the Kubernetes `StorageClass` object itself.** See "The
+  StorageClass gap" below - Terraform provisions the AWS-side EBS CSI
+  driver, but the actual Kubernetes object is a one-time manual `kubectl
+  apply`.
+
+## Key decisions and trade-offs
+
+**Community modules, not hand-rolled resources.** Uses
+`terraform-aws-modules/vpc/aws` and `.../eks/eks`. Unlike the k8s-phase
+choice of plain YAML over Helm (about legibility of *this project's own*
+application config), VPC/EKS wiring is undifferentiated cloud plumbing -
+security group rules between control plane and nodes, OIDC provider
+thumbprints, node bootstrap user-data - that these modules get right and
+hand-rolling risks getting subtly wrong. Every module call here is still
+explicit, with every non-default argument commented.
+
+**The StorageClass gap.** `k8s/infra/postgres/statefulset.yaml`'s PVC has
+no `storageClassName` and relies on the cluster's default. A stock EKS
+cluster ships neither a default StorageClass nor the EBS CSI driver -
+without both, the postgres pod's PVC sits `Pending` forever and blocks
+every service downstream of it. This Terraform config installs the
+`aws-ebs-csi-driver` EKS add-on and its IRSA role (see `irsa.tf`) - the
+AWS-side half of the fix. It deliberately does **not** add a `kubernetes`
+provider just to create the actual `StorageClass` object, to keep "Terraform
+owns AWS, kubectl owns Kubernetes objects" a clean boundary, and to avoid
+the `kubernetes` provider's known gotcha where its EKS auth token expires
+after 15 minutes - a from-scratch `apply` creating VPC+EKS+node group
+commonly takes 15-20 minutes, so a naively-wired provider resource can fail
+on exactly the run that needs it most. After `apply` and `update-kubeconfig`
+(below), run once:
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp3
+EOF
+```
+
+**Single NAT gateway, not one per AZ.** A deliberate SPOF: if it or its AZ
+has an outage, every private-subnet node loses internet egress
+simultaneously. Saves ~$32+/mo vs one-per-AZ. The right call for a
+portfolio demo cluster - documented, not hidden.
+
+**EKS API endpoint restricted to your IP**, not `0.0.0.0/0`
+(`cluster_endpoint_public_access_cidrs`). Basic hygiene; means you need to
+update `terraform.tfvars` and re-apply (or `-target` just that change) if
+your IP changes.
+
+**Node group: `t3.medium` x2, ON_DEMAND, AL2023.** Sized against the actual
+committed manifests - 15 pods (12 app-tier + 3 infra) requesting ~1.9 vCPU /
+~2.44Gi total, plus add-on overhead - comfortably under 2x t3.medium's
+allocatable with ~40% headroom. `t3.large` is the more comfortable
+alternative if every pod's `limits` (not just `requests`) were hit
+simultaneously (~$60/mo more) - noted, not the default. On-demand (not
+spot) to avoid interruption during a live demo. AL2023 (not Bottlerocket)
+for debuggability - the better demo trade-off, not the better production
+one.
+
+**State management: local, deliberately.** Solo operator, one machine, no
+CI applying this. Trade-offs: no locking (a real concern only if you ever
+run this from two machines), no remote backup (lose the disk, lose the
+state - recovery means `terraform import`-ing everything back or
+destroy/recreate), no team collaboration. Natural next step whenever this
+stops being a one-person project: an S3 backend - Terraform 1.15's native
+`use_lockfile` needs no DynamoDB table anymore, simpler than the old
+S3+DynamoDB pattern.
+
+## Cost (rough, us-east-1, verify against current AWS pricing before applying)
+
+| Item | Monthly (~730 hrs) |
+|---|---|
+| EKS control plane (fixed) | ~$73 |
+| 2x t3.medium on-demand | ~$61 |
+| NAT gateway (fixed) + light data processing | ~$35 |
+| EBS (2x 30GB node root + 10GB postgres PVC) | ~$6 |
+| ECR storage (lifecycle-bounded) | ~$1-2 |
+| KMS key (EKS module's default secrets-encryption key) | ~$1 |
+| **Total, running continuously** | **~$175-180/mo** |
+
+**~$108/mo of that (control plane + NAT gateway) accrues even with an idle,
+empty cluster.** Since this is reviewed episodically (recruiter/admissions
+committee), `terraform destroy` between review sessions and re-`apply`
+before a demo is the realistic way to avoid a standing bill.
+
+## Prerequisites
+
+- Terraform >= 1.15, AWS CLI v2, credentials configured
+  (`aws sts get-caller-identity` should succeed).
+- `cp terraform.tfvars.example terraform.tfvars` and fill in `my_ip_cidr`
+  (get it via `curl https://checkip.amazonaws.com`).
+
+## Usage
+
+```bash
+terraform init
+terraform validate
+terraform plan -out=tfplan   # review carefully - creates ~$175-180/mo of real resources
+terraform apply tfplan       # only when you're ready to incur that cost
+
+# once applied:
+aws eks update-kubeconfig --region us-east-1 --name code-review-platform
+kubectl apply -f - <<'EOF'   # the StorageClass gap, see above
+...
+EOF
+
+# push images (after `terraform output ecr_repository_urls`):
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
+docker build -f services/auth-service/Dockerfile -t <account>.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest .
+docker push <account>.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest
+# repeat per service, then update k8s/*/deployment.yaml's image: placeholders
+# to match, and follow k8s/README.md's apply order.
+
+# to stop the bill between sessions:
+terraform destroy
+```
+
+## Verification without incurring cost
+
+```bash
+terraform fmt -check -recursive
+terraform init
+terraform validate
+terraform plan -out=tfplan   # calls real read-only AWS APIs, creates nothing
+terraform show tfplan
+```

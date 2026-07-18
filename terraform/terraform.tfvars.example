@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars (gitignored - same pattern as
+# k8s/secrets.example.yaml). Every value below has a sensible default in
+# variables.tf except my_ip_cidr, which has none on purpose.
+
+aws_region = "us-east-1"
+
+# Get yours with: curl https://checkip.amazonaws.com
+my_ip_cidr = "REPLACE_ME/32"
+
+# Uncomment to override defaults:
+# cluster_name         = "code-review-platform"
+# kubernetes_version   = "1.31"
+# node_instance_types  = ["m7i-flex.large"]  # must be free-tier-eligible on
+#                                              # a free-tier-restricted account -
+#                                              # check with:
+#                                              # aws ec2 describe-instance-types \
+#                                              #   --filters Name=free-tier-eligible,Values=true
+# node_desired_size    = 2
+# node_capacity_type   = "ON_DEMAND"
