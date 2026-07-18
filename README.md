@@ -103,9 +103,11 @@ pytest -v
 
 Every service's suite runs against an in-memory SQLite DB (and fakeredis,
 where a service uses Redis) - no external services required. All five
-suites are green as of this commit (`auth-service`: 7 passed,
+backend suites are green as of this commit (`auth-service`: 7 passed,
 `repository-service`: 9 passed, `ai-analysis-service`: 8 passed,
-`review-service`: 8 passed, `notification-service`: 13 passed).
+`review-service`: 8 passed, `notification-service`: 13 passed) - that's
+five of the platform's six services; `dashboard-service` has no automated
+test suite (see "Known gaps" below).
 
 ## Known gaps / honest trade-offs (worth being able to discuss in an interview)
 
